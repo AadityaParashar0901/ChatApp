@@ -1,166 +1,165 @@
-import { useState, useEffect, useContext, createContext } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { io } from 'socket.io-client';
-import './App.css';
+import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import axios from "axios";
+import { io } from "socket.io-client";
+import "./App.css";
 
-const AppContext = createContext();
 const socket = io("http://localhost:5000");
+const Ctx = createContext();
 
-const Home = () => {
-  const { username, isLoggedIn, userId } = useContext(AppContext);
-  const [chatId, setChatId] = useState("");
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [chats, setChats] = useState([]);
-  useEffect(() => {
-    if (userId) {
-      socket.emit("join", userId);
+const Login = () => {
+  const { setUser, setUserId } = useContext(Ctx);
+  const nav = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const f = async e => {
+    e.preventDefault();
+    const r = await axios.post("http://localhost:5000/auth/login", { email, password });
+    if (r.data.result) {
+      setUser(r.data.name);
+      setUserId(r.data.userId);
+      nav("/");
     }
-  }, [userId]);
-  useEffect(() => {
-    socket.on("receive_message", (msg) => {
-      setMessages((prev) => [...prev, msg]);
-    });
-    return () => socket.off("receive_message");
-  }, []);
-  useEffect(() => {
-    setChats([
-      { _id: "chat1", name: "Test Chat 1" },
-      { _id: "chat2", name: "Test Chat 2" }
-    ]);
-  }, []);
-  const sendMessage = () => {
-    if (!message || !chatId) return;
-    socket.emit("send_message", {
-      sender: userId,
-      chatId: chatId,
-      content: message
-    });
-    setMessage("");
   };
   return (
-    <div>
-      {isLoggedIn && <h3>Welcome {username}</h3>}
-      <div style={{ display: "flex", gap: "20px" }}>
-        <div>
-          <h4>Chats</h4>
-          {chats.map((chat) => (
-            <div key={chat._id} style={{ cursor: "pointer", border: "1px solid white", margin: "5px", padding: "5px" }} onClick={() => setChatId(chat._id)}>{chat.name}</div>
+    <div className="center">
+      <form className="card" onSubmit={f}>
+        <h2>Login</h2>
+        <input placeholder="Email" onChange={e=>setEmail(e.target.value)} />
+        <input placeholder="Password" type="password" onChange={e=>setPassword(e.target.value)} />
+        <button>Login</button>
+      </form>
+    </div>
+  );
+};
+
+const Signup = () => {
+  const nav = useNavigate();
+  const [name,setName]=useState("");
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const f=async e=>{
+    e.preventDefault();
+    await axios.post("http://localhost:5000/auth/signup",{name,email,password});
+    nav("/login");
+  };
+  return (
+    <div className="center">
+      <form className="card" onSubmit={f}>
+        <h2>Sign Up</h2>
+        <input placeholder="Name" onChange={e=>setName(e.target.value)} />
+        <input placeholder="Email" onChange={e=>setEmail(e.target.value)} />
+        <input placeholder="Password" type="password" onChange={e=>setPassword(e.target.value)} />
+        <button>Signup</button>
+      </form>
+    </div>
+  );
+};
+
+const Home = () => {
+  const { user } = useContext(Ctx);
+  return user ? <Chats/> : <Login/>;
+};
+
+const Chats = () => {
+  const { userId } = useContext(Ctx);
+  const [chats,setChats]=useState([]);
+  const [chatId,setChatId]=useState("");
+  const [messages,setMessages]=useState([]);
+  const [text,setText]=useState("");
+  const [target,setTarget]=useState("");
+  const bottomRef = useRef(null);
+
+  useEffect(()=>{
+    if(userId){
+      socket.emit("join",userId);
+      axios.get(`http://localhost:5000/chats/${userId}`)
+        .then(r=>setChats(r.data.chats));
+    }
+  },[userId]);
+
+  useEffect(()=>{
+    if(chatId){
+      axios.get(`http://localhost:5000/messages/${chatId}`)
+        .then(r=>setMessages(r.data.messages));
+    }
+  },[chatId]);
+
+  useEffect(()=>{
+    socket.on("receive_message",m=>{
+      setMessages(p=>[...p,m]);
+    });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    return ()=>socket.off("receive_message");
+  },[messages]);
+
+  const send=()=>{
+    if(!text||!chatId)return;
+    socket.emit("send_message",{sender:userId,chatId,content:text});
+    setText("");
+  };
+
+  const createChat=async()=>{
+    const r=await axios.post("http://localhost:5000/chat/create",{userId,targetId:target});
+    setChatId(r.data.chatId);
+  };
+
+  return (
+    <div className="app">
+      <div className="sidebar">
+        <h3>Chats</h3>
+        <input placeholder="User ID" onChange={e=>setTarget(e.target.value)} />
+        <button onClick={createChat}>Start Chat</button>
+        <div className="chatList">
+          {chats.length===0 && <p>No chats yet</p>}
+          {chats.map(c=>(
+            <div key={c._id} className="chatItem" onClick={()=>setChatId(c._id)}>
+              {c.participants.map(p=>p.name).join(",")}
+            </div>
           ))}
         </div>
-        <div>
-          <h4>Message</h4>
-          <div style={{ height: "200px", overflowY: "scroll", border: "1px solid white" }}>
-            {messages.map((msg, index) => (
-              <div key={index}>
-                <b>{msg.sender}</b>: {msg.content}
-              </div>
-            ))}
-          </div>
-          <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type a message" />
-          <button onClick={sendMessage}>Send</button>
-        </div>
+      </div>
+      <div className="chatArea">
+        {chatId ? (
+          <>
+            <div className="messages" ref={bottomRef}>
+              {messages.map((m,i)=>(
+                <div key={i} className={`msg ${m.sender===userId?"me":"other"}`}>
+                  <span>{m.content}</span>
+                  <small>{m.status}</small>
+                </div>
+              ))}
+            </div>
+            <div className="inputBox">
+              <input value={text} onChange={e=>setText(e.target.value)} />
+              <button onClick={send}>Send</button>
+            </div>
+          </>
+        ) : (
+          <div className="empty">Select or start a chat</div>
+        )}
       </div>
     </div>
   );
-}
+};
 
-const Login = () => {
-  const { setUsername, setLoggedIn, setUserId } = useContext(AppContext);
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post(
-        "http://localhost:5000/auth/login",
-        { email, password }
-      );
-      if (response.data.result === true) {
-        setLoggedIn(true);
-        setUsername(response.data.name);
-        setUserId(response.data.userId);
-        navigate("/");
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }
+export default function App(){
+  const [user,setUser]=useState("");
+  const [userId,setUserId]=useState("");
   return (
-    <div className="floating-div">
-      <h1>Login</h1>
-      <form onSubmit={handleSubmit}>
-        <input type="email" name="email" placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input type="password" name="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button type="submit">Submit</button>
-      </form>
-    </div>
-  );
-}
-
-const SignUp = () => {
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post(
-        "http://localhost:5000/auth/signup",
-        { name, email, password }
-      );
-      navigate("/login");
-    } catch (err) {
-      console.error(err);
-    }
-  }
-  return (
-    <div className="floating-div">
-      <h1>Sign Up</h1>
-      <form onSubmit={handleSubmit}>
-        <input type="name" name="name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input type="email" name="email" placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input type="password" name="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button type="submit">Submit</button>
-      </form>
-    </div>
-  );
-}
-
-function App() {
-  const [username, setUsername] = useState("");
-  const [isLoggedIn, setLoggedIn] = useState(false);
-  const [userId, setUserId] = useState("");
-  const globalState = {
-    username,
-    setUsername,
-    isLoggedIn,
-    setLoggedIn,
-    userId,
-    setUserId
-  }
-
-  return (
-    <AppContext.Provider value={globalState}>
+    <Ctx.Provider value={{user,setUser,userId,setUserId}}>
       <BrowserRouter>
-        <div className="navigation-bar-div">
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/login">Login</Link>
-            <Link to="/signup">Sign Up</Link>
-          </nav>
+        <div className="navbar">
+          <button onClick={()=>window.location.href="/"}>Home</button>
+          <button onClick={()=>window.location.href="/login"}>Login</button>
+          <button onClick={()=>window.location.href="/signup"}>Signup</button>
         </div>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<SignUp />} />
+          <Route path="*" element={<Home/>}/>
+          <Route path="/login" element={<Login/>}/>
+          <Route path="/signup" element={<Signup/>}/>
         </Routes>
       </BrowserRouter>
-    </AppContext.Provider>
+    </Ctx.Provider>
   );
 }
-
-export default App;
