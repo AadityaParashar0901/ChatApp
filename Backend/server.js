@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
+const sessions = {};
 const { Server } = require("socket.io");
 
 const app = express();
@@ -27,6 +28,25 @@ const Message = mongoose.model("Message", new mongoose.Schema({
   content: String,
   status: { type: String, default: "sent" }
 }, { timestamps: true }));
+
+const createSession = (userId) => {
+  const token = Math.random().toString(36).substring(2);
+  const expiresAt = Date.now() + 1000 * 60 * 60;
+  sessions[token] = { userId, expiresAt };
+  return token;
+};
+const auth = (req, res, next) => {
+  const token = req.headers["x-token"];
+  if (!token || !sessions[token]) return res.status(401).json({ result: false });
+  const session = sessions[token];
+  if (Date.now() > session.expiresAt) {
+    delete sessions[token];
+    return res.status(401).json({ result: false });
+  }
+  session.expiresAt = Date.now() + 1000 * 60 * 60;
+  req.userId = session.userId;
+  next();
+}
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -63,10 +83,11 @@ app.post("/auth/signup", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
   const u = await User.findOne(req.body);
   if (!u) return res.json({ result: false });
-  res.json({ result: true, name: u.name, userId: u._id });
+  const token = createSession(u._id);
+  res.json({ result: true, name: u.name, userId: u._id, token });
 });
 
-app.post("/chat/create", async (req, res) => {
+app.post("/chat/create", auth, async (req, res) => {
   const { userId, targetId } = req.body;
   let chat = await Chat.findOne({
     participants: { $all: [userId, targetId], $size: 2 }
@@ -75,14 +96,14 @@ app.post("/chat/create", async (req, res) => {
   res.json({ chatId: chat._id });
 });
 
-app.get("/chats/:userId", async (req, res) => {
+app.get("/chats/:userId", auth, async (req, res) => {
   const chats = await Chat.find({ participants: req.params.userId })
     .populate("participants", "name")
     .populate("lastMessage");
   res.json({ chats });
 });
 
-app.get("/messages/:chatId", async (req, res) => {
+app.get("/messages/:chatId", auth, async (req, res) => {
   const messages = await Message.find({ chat: req.params.chatId });
   res.json({ messages });
 });
