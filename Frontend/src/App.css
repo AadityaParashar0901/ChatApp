@@ -59,7 +59,7 @@ body {
 .logo {
   font-weight: 600;
   color: var(--primary-light);
-  font-size: 18px;
+  font-size: 18px; /* changed */
 }
 
 .navLinks {
@@ -132,7 +132,7 @@ body {
 }
 
 .me {
-  background: var(--primary);
+  background: var(--primary); /* changed */
   color: white;
   align-self: flex-end;
   margin-left: auto;
