@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
@@ -9,7 +10,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-mongoose.connect("mongodb://localhost:27017/backend_aaditya");
+mongoose.connect(process.env.MONGO_URI);
 
 const User = mongoose.model("User", new mongoose.Schema({
   name: String,
@@ -108,4 +109,4 @@ app.get("/messages/:chatId", auth, async (req, res) => {
   res.json({ messages });
 });
 
-server.listen(5000);
+server.listen(process.env.PORT || 5000);
