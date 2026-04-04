@@ -120,7 +120,7 @@ const Chats = () => {
           {chats.length === 0 && <p>No chats yet</p>}
           {chats.map((c) => (
             <div key={c._id} className="chatItem" onClick={() => setChatId(c._id)}>
-              {c.participants.map((p) => p.name).join(",")}
+              {c.participants.find((p) => p._id !== userId)?.name}
             </div>
           ))}
         </div>
@@ -137,7 +137,7 @@ const Chats = () => {
               ))}
             </div>
             <div className="inputBox">
-              <input value={text} onChange={(e) => setText(e.target.value)} />
+              <input placeholder="Type a message..."  value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { send(); } }}/>
               <button onClick={send}>Send</button>
             </div>
           </>
